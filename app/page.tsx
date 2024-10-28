@@ -6,6 +6,7 @@ import { FHIRRelationshipBeam } from "@/components/FHIRRelationshipBeam";
 import PulsatingButton from "@/components/ui/pulsating-button";
 import { Separator } from "@/components/ui/separator";
 import { ModeToggle } from "@/components/mode-toggle";
+import SlidingButton from "@/components/sliding-button";
 
 export default function Home() {
   return (
@@ -23,9 +24,9 @@ export default function Home() {
           </p>
           <div className="flex justify-center">
             <Link href="/tool" passHref>
-              <PulsatingButton>
+              <SlidingButton>
                 Launch Visualisation Tool
-              </PulsatingButton>
+              </SlidingButton>
             </Link>
           </div>
         </section>
