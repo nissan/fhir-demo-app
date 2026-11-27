@@ -15,6 +15,8 @@ import StructuredDataModal from '@/components/StructuredDataModal';
 import ContactPointDisplay from '@/components/ContactPointDisplay';
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import { conceptText, referencePath } from '@/lib/fhir';
 
 // Update the patientFields array to include 'text'
 const patientFields = [
@@ -50,6 +52,7 @@ const renderIdentifier = (identifier: any) => {
 
 const renderReference = (reference: any) => {
   if (!reference) return null;
+  const href = referencePath(reference.reference);
 
   return (
     <div className="ml-4 mt-2">
@@ -57,9 +60,11 @@ const renderReference = (reference: any) => {
       {reference.reference && (
         <p>
           <strong>Reference:</strong>{' '}
-          <Link href={`/tool/${reference.reference.split('/')[0].toLowerCase()}s/${reference.reference.split('/')[1]}`} className="text-blue-500 hover:underline">
-            {reference.reference}
-          </Link>
+          {href ? (
+            <Link href={href} className="text-blue-500 hover:underline">
+              {reference.reference}
+            </Link>
+          ) : reference.reference}
         </p>
       )}
     </div>
@@ -102,7 +107,7 @@ const renderCodeableConcept = (concept: any, fieldName: string) => {
 export default function PatientDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [patient, setPatient] = useState<any>(null);
+  const [patient, setPatient] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(patientFields);
   const [practitioners, setPractitioners] = useState<any[]>([]);
@@ -118,8 +123,11 @@ export default function PatientDetailsPage() {
     }
   }, [id]);
 
-  if (!patient) {
+  if (patient === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!patient) {
+    return <ResourceNotFound resourceType="Patient" id={id} listHref="/tool/patients" />;
   }
 
   const toggleField = (field: string) => {
@@ -235,7 +243,7 @@ export default function PatientDetailsPage() {
           <div>
             <strong>Communication:</strong>
             {value?.map((c: any, index: number) => (
-              <p key={index}>{c.language?.coding?.[0]?.display || 'N/A'}</p>
+              <p key={index}>{conceptText(c.language) || 'N/A'}</p>
             )) || 'N/A'}
           </div>
         );

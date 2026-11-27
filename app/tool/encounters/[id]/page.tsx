@@ -11,6 +11,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { getEncounters, getPractitioners, getPatients, getOrganizations } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import PeriodDisplay from '@/components/PeriodDisplay';
+import FhirValue from '@/components/FhirValue';
+import { conceptText, humanName, parseReference } from '@/lib/fhir';
 
 // Define the FHIR Encounter fields
 const encounterFields = [
@@ -21,81 +25,28 @@ const encounterFields = [
 export default function EncounterDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [encounter, setEncounter] = useState<any>(null);
+  const [encounter, setEncounter] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(encounterFields);
   const [practitioners, setPractitioners] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [organizations, setOrganizations] = useState<any[]>([]);
 
+  // Referenced resources are looked up at render time; the stored Encounter is never modified.
   useEffect(() => {
-    const fetchEncounterData = async () => {
-      if (id && typeof id === 'string') {
-        const encounters = getEncounters();
-        const foundEncounter = encounters.find(e => e.id === id);
-        
-        if (foundEncounter) {
-          // Fetch all referenced resources
-          const updatedEncounter = await fetchReferencedResources(foundEncounter);
-          setEncounter(updatedEncounter);
-        }
-      }
-      setPractitioners(getPractitioners());
-      setPatients(getPatients());
-      setOrganizations(getOrganizations());
-    };
-
-    fetchEncounterData();
+    if (id && typeof id === 'string') {
+      setEncounter(getEncounters().find(e => e.id === id) || null);
+    }
+    setPractitioners(getPractitioners());
+    setPatients(getPatients());
+    setOrganizations(getOrganizations());
   }, [id]);
 
-  const fetchReferencedResources = async (encounter: any) => {
-    const updatedEncounter = { ...encounter };
-
-    // Fetch subject (patient) data
-    if (encounter.subject?.reference) {
-      const patientId = encounter.subject.reference.split('/').pop();
-      const patientData = await fetchResourceData('Patient', patientId);
-      updatedEncounter.subject.resource = patientData;
-    }
-
-    // Fetch participant (practitioner) data
-    if (encounter.participant) {
-      for (let i = 0; i < encounter.participant.length; i++) {
-        if (encounter.participant[i].individual?.reference) {
-          const practitionerId = encounter.participant[i].individual.reference.split('/').pop();
-          const practitionerData = await fetchResourceData('Practitioner', practitionerId);
-          updatedEncounter.participant[i].individual.resource = practitionerData;
-        }
-      }
-    }
-
-    // Fetch serviceProvider (organization) data
-    if (encounter.serviceProvider?.reference) {
-      const organizationId = encounter.serviceProvider.reference.split('/').pop();
-      const organizationData = await fetchResourceData('Organization', organizationId);
-      updatedEncounter.serviceProvider.resource = organizationData;
-    }
-
-    return updatedEncounter;
-  };
-
-  const fetchResourceData = async (resourceType: string, id: string) => {
-    // In a real application, you would make an API call here
-    // For this example, we'll fetch from our local data store
-    switch (resourceType) {
-      case 'Patient':
-        return getPatients().find(p => p.id === id);
-      case 'Practitioner':
-        return getPractitioners().find(p => p.id === id);
-      case 'Organization':
-        return getOrganizations().find(o => o.id === id);
-      default:
-        return null;
-    }
-  };
-
-  if (!encounter) {
+  if (encounter === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!encounter) {
+    return <ResourceNotFound resourceType="Encounter" id={id} listHref="/tool/encounters" />;
   }
 
   const toggleField = (field: string) => {
@@ -115,24 +66,25 @@ export default function EncounterDetailsPage() {
       case 'status':
         return <p><strong>Status:</strong> {encounter.status}</p>;
       case 'class':
-        return <p><strong>Class:</strong> {encounter.class?.code || 'N/A'}</p>;
+        return <p><strong>Class:</strong> {encounter.class?.display ? `${encounter.class.display} (${encounter.class.code})` : encounter.class?.code || 'N/A'}</p>;
       case 'type':
         return <p><strong>Type:</strong> {encounter.type?.[0]?.coding?.[0]?.display || 'N/A'}</p>;
       case 'subject':
         if (!encounter.subject?.reference) return <p><strong>Subject:</strong> N/A</p>;
-        const patient = encounter.subject.resource;
+        const subjectId = parseReference(encounter.subject.reference)?.id;
+        const patient = patients.find(p => p.id === subjectId);
         return (
           <p>
             <strong>Subject:</strong>{' '}
             <HoverCard>
               <HoverCardTrigger asChild>
-                <Link href={`/tool/patients/${patient?.id}`} className="text-blue-500 hover:underline">
-                  {patient ? `${patient.name[0].given.join(' ')} ${patient.name[0].family}` : 'Unknown Patient'} ({encounter.subject.reference})
+                <Link href={`/tool/patients/${subjectId}`} className="text-blue-500 hover:underline">
+                  {humanName(patient, 'Unknown Patient')} ({encounter.subject.reference})
                 </Link>
               </HoverCardTrigger>
               <HoverCardContent className="w-80">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-semibold">{patient?.name[0]?.given.join(' ')} {patient?.name[0]?.family}</h4>
+                  <h4 className="text-sm font-semibold">{humanName(patient, 'Unknown Patient')}</h4>
                   <p className="text-sm">Gender: {patient?.gender}</p>
                   <p className="text-sm">Birth Date: {patient?.birthDate}</p>
                 </div>
@@ -150,18 +102,18 @@ export default function EncounterDetailsPage() {
 
               const [resourceType, id] = reference.split('/');
               if (resourceType === 'Practitioner') {
-                const practitioner = p.individual.resource;
+                const practitioner = practitioners.find(each => each.id === id);
                 return (
                   <p key={index}>
                     <HoverCard>
                       <HoverCardTrigger asChild>
                         <Link href={`/tool/practitioners/${id}`} className="text-blue-500 hover:underline">
-                          {practitioner ? `Dr. ${practitioner.name[0].given.join(' ')} ${practitioner.name[0].family}` : 'Unknown Practitioner'} ({reference})
+                          {humanName(practitioner, 'Unknown Practitioner')} ({reference})
                         </Link>
                       </HoverCardTrigger>
                       <HoverCardContent className="w-80">
                         <div className="space-y-1">
-                          <h4 className="text-sm font-semibold">Dr. {practitioner?.name[0]?.given.join(' ')} {practitioner?.name[0]?.family}</h4>
+                          <h4 className="text-sm font-semibold">{humanName(practitioner, 'Unknown Practitioner')}</h4>
                           <p className="text-sm">Gender: {practitioner?.gender}</p>
                           <p className="text-sm">Qualification: {practitioner?.qualification?.[0]?.code?.coding?.[0]?.display || 'N/A'}</p>
                         </div>
@@ -170,13 +122,7 @@ export default function EncounterDetailsPage() {
                   </p>
                 );
               } else {
-                return (
-                  <p key={index}>
-                    <Link href={`/tool/${resourceType.toLowerCase()}s/${id}`} className="text-blue-500 hover:underline">
-                      {reference}
-                    </Link>
-                  </p>
-                );
+                return <p key={index}><FhirValue value={p.individual} fieldName="Participant" /></p>;
               }
             })}
           </div>
@@ -184,18 +130,21 @@ export default function EncounterDetailsPage() {
       case 'period':
         return (
           <div>
-            <p><strong>Start:</strong> {encounter.period?.start || 'N/A'}</p>
-            <p><strong>End:</strong> {encounter.period?.end || 'N/A'}</p>
+            <strong>Period:</strong>
+            <PeriodDisplay start={encounter.period?.start} end={encounter.period?.end} />
           </div>
         );
       case 'reasonCode':
-        return <p><strong>Reason:</strong> {encounter.reasonCode?.[0]?.coding?.[0]?.display || 'N/A'}</p>;
+        return <p><strong>Reason:</strong> {conceptText(encounter.reasonCode?.[0]) || 'N/A'}</p>;
       case 'diagnosis':
         return (
           <div>
             <strong>Diagnoses:</strong>
             {encounter.diagnosis?.map((d: any, index: number) => (
-              <p key={index}>{d.condition?.reference || 'N/A'}</p>
+              <p key={index}>
+                <FhirValue value={d.condition} fieldName="Diagnosis" />
+                {d.use && ` (${conceptText(d.use)})`}
+              </p>
             ))}
           </div>
         );
@@ -204,19 +153,20 @@ export default function EncounterDetailsPage() {
           <div>
             <strong>Locations:</strong>
             {encounter.location?.map((l: any, index: number) => (
-              <p key={index}>{l.location?.reference || 'N/A'}</p>
+              <p key={index}><FhirValue value={l.location} fieldName="Location" /></p>
             ))}
           </div>
         );
       case 'serviceProvider':
         if (!encounter.serviceProvider?.reference) return <p><strong>Service Provider:</strong> N/A</p>;
-        const organization = encounter.serviceProvider.resource;
+        const providerId = parseReference(encounter.serviceProvider.reference)?.id;
+        const organization = organizations.find(o => o.id === providerId);
         return (
           <p>
             <strong>Service Provider:</strong>{' '}
             <HoverCard>
               <HoverCardTrigger asChild>
-                <Link href={`/tool/organisations/${organization?.id}`} className="text-blue-500 hover:underline">
+                <Link href={`/tool/organisations/${providerId}`} className="text-blue-500 hover:underline">
                   {organization?.name || 'Unknown Organization'} ({encounter.serviceProvider.reference})
                 </Link>
               </HoverCardTrigger>

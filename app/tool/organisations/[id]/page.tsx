@@ -12,6 +12,7 @@ import { getOrganizations } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
 import HtmlModal from '@/components/HtmlModal';
 import StructuredDataModal from '@/components/StructuredDataModal';
+import ResourceNotFound from '@/components/ResourceNotFound';
 
 // Define the FHIR Organization fields
 const organizationFields = [
@@ -22,7 +23,7 @@ const organizationFields = [
 export default function OrganizationDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [organization, setOrganization] = useState<any>(null);
+  const [organization, setOrganization] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(organizationFields);
 
@@ -34,8 +35,11 @@ export default function OrganizationDetailsPage() {
     }
   }, [id]);
 
-  if (!organization) {
+  if (organization === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!organization) {
+    return <ResourceNotFound resourceType="Organization" id={id} listHref="/tool/organisations" />;
   }
 
   const toggleField = (field: string) => {
@@ -157,7 +161,7 @@ export default function OrganizationDetailsPage() {
             <strong>Part Of:</strong>{' '}
             {value.reference ? (
               <Link href={`/tool/organisations/${value.reference.split('/')[1]}`} className="text-blue-500 hover:underline">
-                {value.reference}
+                {value.display || value.reference}
               </Link>
             ) : 'N/A'}
           </p>

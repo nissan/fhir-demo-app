@@ -14,11 +14,14 @@ import { Settings } from 'lucide-react';
 import HtmlModal from '@/components/HtmlModal';
 import StructuredDataModal from '@/components/StructuredDataModal';
 import PeriodDisplay from '@/components/PeriodDisplay';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import FhirValue from '@/components/FhirValue';
+import { conceptText, referenceRangeText } from '@/lib/fhir';
 
 // Define the FHIR Observation fields
 const observationFields = [
   'id', 'status', 'category', 'code', 'subject', 'encounter', 'effectiveDateTime',
-  'issued', 'valueQuantity', 'valueCodeableConcept', 'valueString', 'valueBoolean',
+  'issued', 'performer', 'valueQuantity', 'valueCodeableConcept', 'valueString', 'valueBoolean',
   'valueInteger', 'valueRange', 'valueRatio', 'valueSampledData', 'valueTime',
   'valueDateTime', 'valuePeriod', 'dataAbsentReason', 'interpretation', 'note',
   'bodySite', 'method', 'specimen', 'device', 'referenceRange', 'hasMember',
@@ -36,7 +39,7 @@ const renderCoding = (coding: any) => (
 export default function ObservationDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [observation, setObservation] = useState<any>(null);
+  const [observation, setObservation] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(observationFields);
   const [patients, setPatients] = useState<any[]>([]);
@@ -52,8 +55,11 @@ export default function ObservationDetailsPage() {
     setEncounters(getEncounters());
   }, [id]);
 
-  if (!observation) {
+  if (observation === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!observation) {
+    return <ResourceNotFound resourceType="Observation" id={id} listHref="/tool/observations" />;
   }
 
   const toggleField = (field: string) => {
@@ -168,6 +174,13 @@ export default function ObservationDetailsPage() {
         return <p><strong>Effective Date:</strong> {value}</p>;
       case 'issued':
         return <p><strong>Issued:</strong> {value}</p>;
+      case 'performer':
+        return (
+          <div>
+            <strong>Performer:</strong>
+            <FhirValue value={value} fieldName="Performer" />
+          </div>
+        );
       case 'valueQuantity':
         return (
           <div>
@@ -204,9 +217,8 @@ export default function ObservationDetailsPage() {
             <strong>Reference Range:</strong>
             {value.map((range: any, index: number) => (
               <div key={index} className="ml-4 mt-2">
-                <p>Low: {range.low?.value} {range.low?.unit}</p>
-                <p>High: {range.high?.value} {range.high?.unit}</p>
-                <p>Type: {range.type?.text}</p>
+                <p>Range: {referenceRangeText(range)}</p>
+                <p>Type: {conceptText(range.type) || 'N/A'}</p>
               </div>
             ))}
           </div>
