@@ -1,5 +1,11 @@
+import dynamic from 'next/dynamic';
 import Image from 'next/image'
-import PDFViewer from "@/components/pdf-viewer";
+
+// pdfjs only runs in the browser; loading the viewer on demand keeps it out of the server bundle.
+const PDFViewer = dynamic(() => import("@/components/pdf-viewer"), {
+    ssr: false,
+    loading: () => <p>Loading PDF viewer...</p>,
+});
 
 interface MediaViewerProps {
     contentType: string;

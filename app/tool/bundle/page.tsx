@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { getBundles, setBundles } from '@/utils/data-store';
-import { generateBundle } from '@/utils/fhir-generators';
+import { generateBundles } from '@/utils/fhir-generators';
+import { resourcePath } from '@/lib/fhir';
 import { Loader2 } from 'lucide-react'; // Import the Loader2 icon from lucide-react
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,22 +25,12 @@ const BundleCard = ({ bundle }: { bundle: any }) => {
     setExpandedResource(expandedResource === resourceType ? null : resourceType);
   };
 
-  const getResourceLink = (resource: any) => {
-    const resourceType = resource.resourceType.toLowerCase();
-    // Handle special cases for resource types that don't follow the standard plural form
-    switch (resourceType) {
-      case 'person':
-        return `/tool/persons/${resource.id}`;
-      case 'family':
-        return `/tool/families/${resource.id}`;
-      case 'healthcareservice':
-        return `/tool/healthcareservices/${resource.id}`;
-      case 'diagnosticreport':
-        return `/tool/reports/${resource.id}`;
-      default:
-        // For most resources, just add 's' to the end
-        return `/tool/${resourceType}s/${resource.id}`;
-    }
+  // Only resource types that have a detail page are linked.
+  const renderResourceId = (resourceType: unknown, id: unknown) => {
+    const href = resourcePath(resourceType, id);
+    return href
+      ? <Link href={href} className="text-blue-500 hover:underline">{String(id)}</Link>
+      : <span>{String(id)}</span>;
   };
 
   const renderResourceField = (resource: any, field: string) => {
@@ -96,9 +87,7 @@ const BundleCard = ({ bundle }: { bundle: any }) => {
           <ul className="mt-2 pl-4">
             {resources.map((resource: any, index: number) => (
               <li key={index}>
-                <Link href={getResourceLink(resource)} className="text-blue-500 hover:underline">
-                  {resource.id}
-                </Link>
+                {renderResourceId(resource.resourceType, resource.id)}
                 {Object.keys(resource).map((field) => renderResourceField(resource, field))}
               </li>
             ))}
@@ -186,7 +175,8 @@ export default function BundlesPage() {
 
   const handleRegenerateFakeData = () => {
     setIsLoadingNewBundles(true);
-    const newBundles = Array.from({ length: 3 }, generateBundle);
+    // A fresh seed each time; regenerated bundles live in memory until the page is reloaded.
+    const newBundles = generateBundles(Math.floor(Math.random() * 2 ** 31));
     setBundles(newBundles);
     setBundlesState(newBundles);
     setIsLoadingNewBundles(false);

@@ -11,6 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { getHealthcareServices, getOrganisations } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import FhirValue from '@/components/FhirValue';
 
 // Define the FHIR HealthcareService fields
 const healthcareServiceFields = [
@@ -23,7 +25,7 @@ const healthcareServiceFields = [
 export default function HealthcareServiceDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [service, setService] = useState<any>(null);
+  const [service, setService] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(healthcareServiceFields);
   const [organisations, setOrganisations] = useState<any[]>([]);
@@ -37,8 +39,11 @@ export default function HealthcareServiceDetailsPage() {
     setOrganisations(getOrganisations());
   }, [id]);
 
-  if (!service) {
+  if (service === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!service) {
+    return <ResourceNotFound resourceType="Healthcare service" id={id} listHref="/tool/healthcareservices" />;
   }
 
   const toggleField = (field: string) => {
@@ -103,7 +108,7 @@ export default function HealthcareServiceDetailsPage() {
             <strong>Locations:</strong>
             <ul>
               {service.location?.map((loc: any, index: number) => (
-                <li key={index}>{loc.reference || 'N/A'}</li>
+                <li key={index}><FhirValue value={loc} fieldName="Location" /></li>
               ))}
             </ul>
           </div>
@@ -118,7 +123,7 @@ export default function HealthcareServiceDetailsPage() {
           </div>
         );
       default:
-        return <p><strong>{field}:</strong> {JSON.stringify(service[field])}</p>;
+        return <div><strong>{field}:</strong> <FhirValue value={service[field]} fieldName={field} /></div>;
     }
   };
 

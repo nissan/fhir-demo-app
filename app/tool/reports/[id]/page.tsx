@@ -15,6 +15,8 @@ import MediaViewer from "@/components/media-viewer";
 import HtmlModal from '@/components/HtmlModal';
 import XmlModal from '@/components/XmlModal';
 import StructuredDataModal from '@/components/StructuredDataModal';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import { humanName, referenceRangeText } from '@/lib/fhir';
 
 // Define the FHIR DiagnosticReport fields
 const diagnosticReportFields = [
@@ -38,7 +40,7 @@ const formatDateTime = (dateTimeString: string) => {
 export default function DiagnosticReportDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(diagnosticReportFields);
   const [patients, setPatients] = useState<any[]>([]);
@@ -61,8 +63,11 @@ export default function DiagnosticReportDetailsPage() {
     }
   }, [id]);
 
-  if (!report) {
+  if (report === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!report) {
+    return <ResourceNotFound resourceType="Diagnostic report" id={id} listHref="/tool/reports" />;
   }
 
   const toggleField = (field: string) => {
@@ -84,7 +89,7 @@ export default function DiagnosticReportDetailsPage() {
     switch (resourceType) {
       case 'Practitioner':
         resourceData = practitioners.find(p => p.id === id);
-        displayName = resourceData ? `Dr. ${resourceData.name[0].given.join(' ')} ${resourceData.name[0].family}` : 'Unknown Practitioner';
+        displayName = humanName(resourceData, 'Unknown Practitioner');
         hoverContent = (
           <div className="space-y-1">
             <h4 className="text-sm font-semibold">{displayName}</h4>
@@ -162,12 +167,12 @@ export default function DiagnosticReportDetailsPage() {
               <HoverCard>
                 <HoverCardTrigger asChild>
                   <Link href={`/tool/patients/${subjectId}`} className="text-blue-500 hover:underline">
-                    {patient ? `${patient.name[0].given.join(' ')} ${patient.name[0].family}` : 'Unknown Patient'} ({report.subject.reference})
+                    {humanName(patient, 'Unknown Patient')} ({report.subject.reference})
                   </Link>
                 </HoverCardTrigger>
                 <HoverCardContent className="w-80">
                   <div className="space-y-1">
-                    <h4 className="text-sm font-semibold">{patient?.name[0]?.given.join(' ')} {patient?.name[0]?.family}</h4>
+                    <h4 className="text-sm font-semibold">{humanName(patient, 'Unknown Patient')}</h4>
                     <p className="text-sm">Gender: {patient?.gender}</p>
                     <p className="text-sm">Birth Date: {patient?.birthDate}</p>
                   </div>
@@ -228,9 +233,10 @@ export default function DiagnosticReportDetailsPage() {
         });
         return <FieldRow label="Issued" value={formattedIssuedDate} />;
       case 'performer':
+      case 'resultsInterpreter':
         return (
           <div>
-            <strong>Performer:</strong>
+            <strong>{field === 'performer' ? 'Performer' : 'Results Interpreter'}:</strong>
             {Array.isArray(value) ? (
               value.map((performer, index) => (
                 <div key={index} className="ml-4 mt-2">
@@ -280,7 +286,7 @@ export default function DiagnosticReportDetailsPage() {
                         )}
                         {observation?.referenceRange && observation.referenceRange[0] && (
                           <p className="text-sm mt-1">
-                            Reference Range: {observation.referenceRange[0].low?.value} - {observation.referenceRange[0].high?.value} {observation.referenceRange[0].low?.unit}
+                            Reference Range: {referenceRangeText(observation.referenceRange[0])}
                           </p>
                         )}
                       </li>

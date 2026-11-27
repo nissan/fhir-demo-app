@@ -36,7 +36,8 @@ const PdfViewer: React.FC<PDFViewerProps> = ({ fileUrl }) => {
       >
         <Toolbar />
       </div>
-      <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
+      {/* The worker is served from public/ and matches the installed pdfjs-dist version. */}
+      <Worker workerUrl="/pdf.worker.min.js">
         <div className="flex-1 overflow-hidden " >
           <Viewer
             fileUrl={fileUrl}

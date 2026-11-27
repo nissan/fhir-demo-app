@@ -1,90 +1,67 @@
-import { generateBundle } from './fhir-generators';
+import { isRecord } from '../lib/fhir';
+import { generateBundles } from './fhir-generators';
 
-// Generate a fixed number of bundles
-let bundles: any[] = Array.from({ length: 3 }, generateBundle);
+/** A resource as loaded; bundles can come from any server, so only resourceType is relied on. */
+export type StoredResource = { resourceType: string; id?: string; [key: string]: unknown };
+type BundlesUpdate = unknown[] | Record<string, unknown> | ((current: unknown[]) => unknown[]);
 
-// Add a new object to keep track of resource counts
-let resourceCounts: { [key: string]: number } = {};
+const COUNTED_TYPES = [
+  'Patient', 'Practitioner', 'Organization', 'DiagnosticReport', 'Encounter',
+  'Observation', 'CareTeam', 'HealthcareService', 'Condition',
+];
 
-export const getBundles = () => bundles;
-
-const extractResources = (bundle: any, resourceType: string) => {
-  const resources = bundle?.entry?.filter((entry: any) => entry.resource.resourceType === resourceType)
-    .map((entry: any) => entry.resource) || [];
-  
-  // Also check for nested resources
-  bundle?.entry?.forEach((entry: any) => {
-    if (entry.resource.resourceType !== resourceType) {
-      Object.values(entry.resource).forEach((value: any) => {
-        if (value && typeof value === 'object' && value.resourceType === resourceType) {
-          resources.push(value);
-        }
-      });
-    }
-  });
-
-  return resources;
-};
-
-const getResourcesFromBundles = (resourceType: string) => {
-  const resources = bundles.flatMap(bundle => extractResources(bundle, resourceType));
-  resourceCounts[resourceType] = resources.length;
-  return resources;
-};
-
-export const getPatients = () => getResourcesFromBundles('Patient');
-export const getPractitioners = () => getResourcesFromBundles('Practitioner');
-export const getOrganizations = () => getResourcesFromBundles('Organization');
-export const getReports = () => getResourcesFromBundles('DiagnosticReport');
-export const getEncounters = () => getResourcesFromBundles('Encounter');
-export const getObservations = () => getResourcesFromBundles('Observation');
-export const getCareTeams = () => getResourcesFromBundles('CareTeam');
-export const getHealthcareServices = () => getResourcesFromBundles('HealthcareService');
-export const getConditions = () => getResourcesFromBundles('Condition');
-
-export const getReportById = (id: string) => {
-  const allReports = getReports();
-  return allReports.find((report: any) => report.id === id);
-};
-
+// Seeded, so the server render and the browser start from identical data.
+let bundles: unknown[] = generateBundles();
+let resourceCounts: Record<string, number> = {};
 let listeners: (() => void)[] = [];
 
-export const setBundles = (newBundles: any) => {
-  if (Array.isArray(newBundles)) {
-    bundles = newBundles;
-  } else {
-    bundles = [newBundles];
-  }
-  
-  // Reset resource counts
-  resourceCounts = {};
-  
-  // Recalculate resource counts
-  getPatients();
-  getPractitioners();
-  getOrganizations();
-  getReports();
-  getEncounters();
-  getObservations();
-  getCareTeams();
-  getHealthcareServices();
-  getConditions();
-  
-  // Notify all listeners that the data has changed
+const isResource = (value: unknown): value is StoredResource => isRecord(value) && typeof value.resourceType === 'string';
+
+const getResources = (resourceType: string): StoredResource[] =>
+  bundles.flatMap((bundle) => {
+    const entries: unknown[] = isRecord(bundle) && Array.isArray(bundle.entry) ? bundle.entry : [];
+    return entries.flatMap((entry) => {
+      const resource = isRecord(entry) ? entry.resource : undefined;
+      if (!isResource(resource)) return [];
+      if (resource.resourceType === resourceType) return [resource];
+      // Bundles fetched from a server can carry resolved references as nested resources.
+      return Object.values(resource).filter(isResource).filter(nested => nested.resourceType === resourceType);
+    });
+  });
+
+const recount = () => {
+  resourceCounts = Object.fromEntries(COUNTED_TYPES.map(resourceType => [resourceType, getResources(resourceType).length]));
+};
+recount();
+
+export const getBundles = () => bundles;
+export const getPatients = () => getResources('Patient');
+export const getPractitioners = () => getResources('Practitioner');
+export const getOrganizations = () => getResources('Organization');
+export const getOrganisations = getOrganizations;
+export const getLocations = () => getResources('Location');
+export const getReports = () => getResources('DiagnosticReport');
+export const getEncounters = () => getResources('Encounter');
+export const getObservations = () => getResources('Observation');
+export const getCareTeams = () => getResources('CareTeam');
+export const getHealthcareServices = () => getResources('HealthcareService');
+export const getConditions = () => getResources('Condition');
+
+export const getReportById = (id: string) => getReports().find(report => report.id === id);
+
+/** Replaces the loaded bundles with one bundle, a list, or the result of updating the current list. */
+export const setBundles = (update: BundlesUpdate) => {
+  const next = typeof update === 'function' ? update(bundles) : update;
+  bundles = Array.isArray(next) ? next : [next];
+  recount();
   listeners.forEach(listener => listener());
 };
 
 export const addListener = (listener: () => void) => {
   listeners.push(listener);
   return () => {
-    listeners = listeners.filter(l => l !== listener);
+    listeners = listeners.filter(each => each !== listener);
   };
 };
 
-// Add a new function to get resource counts
 export const getResourceCounts = () => resourceCounts;
-
-let organizations: any[] = [];
-
-// Add this line to provide an alias for getOrganizations
-export const getOrganisations = getOrganizations;

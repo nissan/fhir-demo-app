@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { getConditions, getPatients, getEncounters } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import FhirValue from '@/components/FhirValue';
+import { conceptText, humanName } from '@/lib/fhir';
 
 // Define the FHIR Condition fields
 const conditionFields = [
@@ -22,7 +25,7 @@ const conditionFields = [
 export default function ConditionDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [condition, setCondition] = useState<any>(null);
+  const [condition, setCondition] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(conditionFields);
   const [patients, setPatients] = useState<any[]>([]);
@@ -38,8 +41,11 @@ export default function ConditionDetailsPage() {
     setEncounters(getEncounters());
   }, [id]);
 
-  if (!condition) {
+  if (condition === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!condition) {
+    return <ResourceNotFound resourceType="Condition" id={id} listHref="/tool/conditions" />;
   }
 
   const toggleField = (field: string) => {
@@ -77,7 +83,7 @@ export default function ConditionDetailsPage() {
       case 'category':
         return <p><strong>Category:</strong> {condition.category?.[0]?.coding?.[0]?.display || 'N/A'}</p>;
       case 'severity':
-        return <p><strong>Severity:</strong> {condition.severity?.coding?.[0]?.display || 'N/A'}</p>;
+        return <p><strong>Severity:</strong> {conceptText(condition.severity) || 'N/A'}</p>;
       case 'code':
         return <p><strong>Code:</strong> {condition.code?.coding?.[0]?.display || 'N/A'}</p>;
       case 'bodySite':
@@ -92,12 +98,12 @@ export default function ConditionDetailsPage() {
             <HoverCard>
               <HoverCardTrigger asChild>
                 <Link href={`/tool/patients/${patientId}`} className="text-blue-500 hover:underline">
-                  {patient ? `${patient.name[0].given.join(' ')} ${patient.name[0].family}` : 'Unknown Patient'} ({condition.subject.reference})
+                  {humanName(patient, 'Unknown Patient')} ({condition.subject.reference})
                 </Link>
               </HoverCardTrigger>
               <HoverCardContent className="w-80">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-semibold">{patient?.name[0]?.given.join(' ')} {patient?.name[0]?.family}</h4>
+                  <h4 className="text-sm font-semibold">{humanName(patient, 'Unknown Patient')}</h4>
                   <p className="text-sm">Gender: {patient?.gender}</p>
                   <p className="text-sm">Birth Date: {patient?.birthDate}</p>
                 </div>
@@ -135,9 +141,9 @@ export default function ConditionDetailsPage() {
       case 'recordedDate':
         return <p><strong>Recorded Date:</strong> {formatDate(condition.recordedDate)}</p>;
       case 'recorder':
-        return <p><strong>Recorder:</strong> {condition.recorder?.reference || 'N/A'}</p>;
+        return <p><strong>Recorder:</strong> <FhirValue value={condition.recorder} fieldName="Recorder" /></p>;
       case 'asserter':
-        return <p><strong>Asserter:</strong> {condition.asserter?.reference || 'N/A'}</p>;
+        return <p><strong>Asserter:</strong> <FhirValue value={condition.asserter} fieldName="Asserter" /></p>;
       case 'stage':
         return (
           <div>

@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { getCareTeams, getPatients, getPractitioners } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
+import ResourceNotFound from '@/components/ResourceNotFound';
+import FhirValue from '@/components/FhirValue';
+import { conceptText, humanName, parseReference } from '@/lib/fhir';
 
 // Define the FHIR CareTeam fields based on the specification
 const careTeamFields = [
@@ -22,7 +25,7 @@ const careTeamFields = [
 export default function CareTeamDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [careTeam, setCareTeam] = useState<any>(null);
+  const [careTeam, setCareTeam] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(careTeamFields);
   const [patients, setPatients] = useState<any[]>([]);
@@ -38,8 +41,11 @@ export default function CareTeamDetailsPage() {
     setPractitioners(getPractitioners());
   }, [id]);
 
-  if (!careTeam) {
+  if (careTeam === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!careTeam) {
+    return <ResourceNotFound resourceType="Care team" id={id} listHref="/tool/careteams" />;
   }
 
   const toggleField = (field: string) => {
@@ -70,12 +76,12 @@ export default function CareTeamDetailsPage() {
             <HoverCard>
               <HoverCardTrigger asChild>
                 <Link href={`/tool/patients/${subjectId}`} className="text-blue-500 hover:underline">
-                  {patient ? `${patient.name[0].given.join(' ')} ${patient.name[0].family}` : 'Unknown Patient'} ({careTeam.subject.reference})
+                  {humanName(patient, 'Unknown Patient')} ({careTeam.subject.reference})
                 </Link>
               </HoverCardTrigger>
               <HoverCardContent className="w-80">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-semibold">{patient?.name[0]?.given.join(' ')} {patient?.name[0]?.family}</h4>
+                  <h4 className="text-sm font-semibold">{humanName(patient, 'Unknown Patient')}</h4>
                   <p className="text-sm">Gender: {patient?.gender}</p>
                   <p className="text-sm">Birth Date: {patient?.birthDate}</p>
                 </div>
@@ -88,24 +94,30 @@ export default function CareTeamDetailsPage() {
           <div>
             <strong>Participants:</strong>
             {careTeam.participant?.map((p: any, index: number) => {
-              const [memberType, memberId] = p.member.reference.split('/');
+              // Members can also be patients, related persons, organisations or other care teams.
+              const member = parseReference(p.member?.reference);
+              if (member?.type !== 'Practitioner') {
+                return <p key={index}><FhirValue value={p.member} fieldName="Participant" /></p>;
+              }
+              const memberId = member.id;
               const practitioner = practitioners.find(pract => pract.id === memberId);
               return (
                 <p key={index}>
                   <HoverCard>
                     <HoverCardTrigger asChild>
                       <Link href={`/tool/practitioners/${memberId}`} className="text-blue-500 hover:underline">
-                        {practitioner ? `Dr. ${practitioner.name[0].given.join(' ')} ${practitioner.name[0].family}` : 'Unknown Practitioner'} ({p.member.reference})
+                        {humanName(practitioner, 'Unknown Practitioner')} ({p.member.reference})
                       </Link>
                     </HoverCardTrigger>
                     <HoverCardContent className="w-80">
                       <div className="space-y-1">
-                        <h4 className="text-sm font-semibold">Dr. {practitioner?.name[0]?.given.join(' ')} {practitioner?.name[0]?.family}</h4>
+                        <h4 className="text-sm font-semibold">{humanName(practitioner, 'Unknown Practitioner')}</h4>
                         <p className="text-sm">Role: {p.role?.[0]?.coding?.[0]?.display || 'N/A'}</p>
                         <p className="text-sm">Qualification: {practitioner?.qualification?.[0]?.code?.coding?.[0]?.display || 'N/A'}</p>
                       </div>
                     </HoverCardContent>
                   </HoverCard>
+                  {p.role?.[0] && <span> - {conceptText(p.role[0])}</span>}
                 </p>
               );
             })}
@@ -118,7 +130,7 @@ export default function CareTeamDetailsPage() {
           </p>
         );
       case 'managingOrganization':
-        return <p><strong>Managing Organization:</strong> {careTeam.managingOrganization?.reference || 'N/A'}</p>;
+        return <div><strong>Managing Organization:</strong> <FhirValue value={careTeam.managingOrganization} fieldName="Managing Organization" /></div>;
       case 'telecom':
         return careTeam.telecom?.map((t: any, index: number) => (
           <p key={index}><strong>{t.system}:</strong> {t.value}</p>
@@ -126,7 +138,7 @@ export default function CareTeamDetailsPage() {
       case 'note':
         return <p><strong>Note:</strong> {careTeam.note?.[0]?.text || 'N/A'}</p>;
       default:
-        return <p><strong>{field}:</strong> {JSON.stringify(careTeam[field])}</p>;
+        return <div><strong>{field}:</strong> <FhirValue value={careTeam[field]} fieldName={field} /></div>;
     }
   };
 

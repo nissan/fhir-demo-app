@@ -14,6 +14,7 @@ import { getPractitioners } from '@/utils/data-store';
 import { Settings } from 'lucide-react';
 import HtmlModal from '@/components/HtmlModal';
 import StructuredDataModal from '@/components/StructuredDataModal';
+import ResourceNotFound from '@/components/ResourceNotFound';
 
 // Define the FHIR Practitioner fields
 const practitionerFields = [
@@ -24,7 +25,7 @@ const practitionerFields = [
 export default function PractitionerDetailsPage() {
   const params = useParams();
   const id = params?.id;
-  const [practitioner, setPractitioner] = useState<any>(null);
+  const [practitioner, setPractitioner] = useState<any>(undefined);
   const [showRawData, setShowRawData] = useState(false);
   const [visibleFields, setVisibleFields] = useState<string[]>(practitionerFields);
 
@@ -36,8 +37,11 @@ export default function PractitionerDetailsPage() {
     }
   }, [id]);
 
-  if (!practitioner) {
+  if (practitioner === undefined) {
     return <div>Loading...</div>;
+  }
+  if (!practitioner) {
+    return <ResourceNotFound resourceType="Practitioner" id={id} listHref="/tool/practitioners" />;
   }
 
   const toggleField = (field: string) => {
